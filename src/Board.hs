@@ -21,15 +21,17 @@ boardHeight = 20
 emptyBoard :: Board
 emptyBoard = replicate boardHeight (replicate boardWidth Nothing)
 
--- Draws the board to the terminal
+-- Draws the board to the terminal with borders
 drawBoard :: Board -> IO ()
 drawBoard board = do
     putStrLn "\ESC[2J"  -- Clear screen
+    putStrLn $ "┌" ++ replicate (boardWidth * 2) '─' ++ "┐"
     mapM_ drawRow board
+    putStrLn $ "└" ++ replicate (boardWidth * 2) '─' ++ "┘"
   where
-    drawRow row = putStrLn $ concatMap drawCell row
-    drawCell Nothing = ". "
-    drawCell (Just shape) = colorize shape
+    drawRow row = putStrLn $ "│" ++ concatMap drawCell row ++ "│"
+    drawCell Nothing       = ". "
+    drawCell (Just shape)  = colorize shape
 
 -- Maps shapes to colored block strings
 colorize :: Shape -> String

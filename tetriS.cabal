@@ -73,7 +73,8 @@ executable tetriS
      brillo,
      OpenGL,
      GLUT,
-     random
+     random,
+     time
 
     -- Directories containing source files.
     hs-source-dirs:   app, src
