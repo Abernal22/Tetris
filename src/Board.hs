@@ -49,12 +49,12 @@ colorize shape = colorCode shape ++ "██" ++ reset
 
 -- Adds a tetromino's blocks to the board temporarily for display
 updateBoardWithTetromino :: Board -> Tetromino -> Board
-updateBoardWithTetromino board tetro@(Tetromino s _) =
-    [ [ cellAt x y | x <- [0..boardWidth - 1] ]
-    | y <- [0..boardHeight - 1] ]
+updateBoardWithTetromino board tetro@(Tetromino s _ _) =
+  [[cellAt x y | x <- [0 .. boardWidth - 1]] | y <- [0 .. boardHeight - 1]]
   where
     blocks = tetrominoBlocks tetro
     cellAt x y =
       if (x, y) `elem` blocks
-         then Just s
-         else board !! y !! x
+        then Just s
+        else board !! y !! x
+
