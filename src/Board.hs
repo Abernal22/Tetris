@@ -1,11 +1,16 @@
 module Board
     ( Board
     , Cell
+    , boardWidth
+    , boardHeight
+    , isValidPosition
+    , mergeTetromino
     , emptyBoard
     , drawBoard
-    , updateBoardWithTetromino
+    , clearFullLines
     ) where
 
+import Data.Maybe (isNothing)
 import Tetromino (Tetromino(..), Shape(..), tetrominoBlocks)
 
 type Cell = Maybe Shape
@@ -24,7 +29,7 @@ emptyBoard = replicate boardHeight (replicate boardWidth Nothing)
 -- Draws the board to the terminal with borders
 drawBoard :: Board -> IO ()
 drawBoard board = do
-    putStrLn "\ESC[2J"  -- Clear screen
+    putStrLn "\ESC[H\ESC[2J"  -- Clear screen
     putStrLn $ "┌" ++ replicate (boardWidth * 2) '─' ++ "┐"
     mapM_ drawRow board
     putStrLn $ "└" ++ replicate (boardWidth * 2) '─' ++ "┘"
@@ -47,14 +52,30 @@ colorize shape = colorCode shape ++ "██" ++ reset
         J -> "\ESC[94m"  -- Bright Blue
         L -> "\ESC[33m"  -- Orange-like Yellow
 
--- Adds a tetromino's blocks to the board temporarily for display
-updateBoardWithTetromino :: Board -> Tetromino -> Board
-updateBoardWithTetromino board tetro@(Tetromino s _) =
-    [ [ cellAt x y | x <- [0..boardWidth - 1] ]
-    | y <- [0..boardHeight - 1] ]
+-- Ensure the tetromino's blocks are inside the board bounds
+isValidPosition :: Tetromino -> Board -> Bool
+isValidPosition tetromino board = all inBounds coords && all cellEmpty coords
   where
-    blocks = tetrominoBlocks tetro
-    cellAt x y =
-      if (x, y) `elem` blocks
-         then Just s
-         else board !! y !! x
+    coords = tetrominoBlocks tetromino
+    inBounds (x, y) = x >= 0 && x < boardWidth && y >= 0 && y < boardHeight
+    cellEmpty (x, y) = isNothing(board !! y !! x)
+
+-- Lock a Tetromino permanently into the board cells
+mergeTetromino :: Tetromino -> Board -> Board
+mergeTetromino tetromino board = foldr place board (tetrominoBlocks tetromino)
+  where
+    s       = shape tetromino
+    place (x, y) rows = 
+      let oldRow = rows !! y
+          newRow = take x oldRow ++ [Just s] ++ drop (x + 1) oldRow
+      in take y rows ++ [newRow] ++ drop (y + 1) rows
+
+-- Remove every completely filled row and return the new board plus the number of cleared lines
+clearFullLines :: Board -> (Board, Int)
+clearFullLines board = (newRows ++ blanks, cleared)
+  where
+    (full, rest) = span (all (not . isNothing)) board
+    remaining    = filter (any isNothing) board
+    cleared      = boardHeight - length remaining
+    newRows      = replicate cleared (replicate boardWidth Nothing)
+    blanks       = remaining
