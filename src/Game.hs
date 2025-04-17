@@ -28,6 +28,7 @@ import System.IO
   )
 
 import Control.Concurrent (threadDelay)
+import Data.Time.Clock (getCurrentTime, diffUTCTime, UTCTime)
 
 data GameState = GameState
   { board :: Board
@@ -44,30 +45,42 @@ runGame = do
   shape <- randomShape
   let initTetro = Tetromino shape initialPosition 0
       initState = GameState emptyBoard initTetro 0 0 0
-  gameLoop initState
+  start <- getCurrentTime
+  gameLoop initState start
 
-gameLoop :: GameState -> IO ()
-gameLoop state = do
-  -- render
+-- Main game loop with smooth input and timed gravity
+gameLoop :: GameState -> UTCTime -> IO ()
+gameLoop state lastDropTime = do
+  now <- getCurrentTime
+  let interval = fromIntegral (max 10000 (600000 - level state * 50000)) / 1000000 -- in seconds
+      timePassed = realToFrac (diffUTCTime now lastDropTime)
+
+  -- Check user input
+  input <- getInputChar
+  let movedState = handleInput input state
+
+  -- Check if gravity should apply
+  if timePassed >= interval
+    then do
+      let afterGrav = tryMoveCurrent (0, 1) movedState
+      newState <- if unchanged afterGrav movedState
+                    then lockAndSpawn movedState
+                    else return afterGrav
+      drawFrame newState
+      now' <- getCurrentTime
+      gameLoop newState now'
+    else do
+      drawFrame movedState
+      threadDelay 20000 -- 20 ms for smoothness
+      gameLoop movedState lastDropTime
+ where
+  unchanged state1 state2 = position (current state1) == position (current state2)
+
+drawFrame :: GameState -> IO ()
+drawFrame state = do
   let previewBoard = mergeTetromino (current state) (board state)
   drawBoard previewBoard
   putStrLn $ "Score: " ++ show (score state) ++ "  Level: " ++ show (level state)
-  -- user input
-  input <- getInputChar
-  let moved = handleInput input state
-  -- gravity drop based on level
-  let interval = max 10000 (600000 - level moved * 50000) -- micro secondds
-  threadDelay interval
-
-  let afterGrav = tryMoveCurrent (0, 1) moved
-
-  -- Deal with any locks, clears, or spawn / check game over
-  newState <- if unchanged afterGrav moved
-                then lockAndSpawn moved
-                else return afterGrav
-  gameLoop newState
- where
-  unchanged state1 state2 = position (current state1) == position (current state2)
 
 -- Input handling
 handleInput :: Maybe Char -> GameState -> GameState
@@ -85,7 +98,7 @@ getInputChar = do
   ready <- hReady stdin
   if ready then Just <$> getChar else return Nothing
 
--- Piece Manipulation Piece
+-- Piece manipulation
 tryMoveCurrent :: (Int, Int) -> GameState -> GameState
 tryMoveCurrent delta state
   | isValidPosition moved (board state) = state { current = moved }
@@ -115,10 +128,10 @@ lockAndSpawn state = do
   let spawn = Tetromino shape initialPosition 0
   if isValidPosition spawn clearedBoard
     then return state { board = clearedBoard
-                  , current = spawn
-                  , linesTotal = totalLines'
-                  , level = level'
-                  , score = score' }
+                      , current = spawn
+                      , linesTotal = totalLines'
+                      , level = level'
+                      , score = score' }
     else do
       drawBoard clearedBoard
       putStrLn "Game Over!"
