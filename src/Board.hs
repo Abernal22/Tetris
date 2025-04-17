@@ -52,19 +52,6 @@ colorize shape = colorCode shape ++ "██" ++ reset
         J -> "\ESC[94m"  -- Bright Blue
         L -> "\ESC[33m"  -- Orange-like Yellow
 
-<<<<<<< HEAD
--- Adds a tetromino's blocks to the board temporarily for display
-updateBoardWithTetromino :: Board -> Tetromino -> Board
-updateBoardWithTetromino board tetro@(Tetromino s _ _) =
-  [[cellAt x y | x <- [0 .. boardWidth - 1]] | y <- [0 .. boardHeight - 1]]
-  where
-    blocks = tetrominoBlocks tetro
-    cellAt x y =
-      if (x, y) `elem` blocks
-        then Just s
-        else board !! y !! x
-
-=======
 -- Ensure the tetromino's blocks are inside the board bounds
 isValidPosition :: Tetromino -> Board -> Bool
 isValidPosition tetromino board = all inBounds coords && all cellEmpty coords
@@ -92,4 +79,3 @@ clearFullLines board = (newRows ++ blanks, cleared)
     cleared      = boardHeight - length remaining
     newRows      = replicate cleared (replicate boardWidth Nothing)
     blanks       = remaining
->>>>>>> main.josh
