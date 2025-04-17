@@ -52,8 +52,9 @@ runGame = do
 gameLoop :: GameState -> UTCTime -> IO ()
 gameLoop state lastDropTime = do
   now <- getCurrentTime
-  let interval = fromIntegral (max 10000 (600000 - level state * 50000)) / 1000000 -- in seconds
-      timePassed = realToFrac (diffUTCTime now lastDropTime)
+  let interval    = fromIntegral (max 5000 (300000 - level state * 30000)) / 1000000
+      timePassed  = realToFrac (diffUTCTime now lastDropTime)
+
 
   -- Check user input
   input <- getInputChar
