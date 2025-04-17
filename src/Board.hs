@@ -1,81 +1,74 @@
 module Board
-    ( Board
-    , Cell
-    , boardWidth
-    , boardHeight
-    , isValidPosition
-    , mergeTetromino
-    , emptyBoard
-    , drawBoard
-    , clearFullLines
-    ) where
+  ( Board
+  , Cell
+  , boardWidth
+  , boardHeight
+  , isValidPosition
+  , mergeTetromino
+  , emptyBoard
+  , clearFullLines
+  , boardToBlocks
+  ) where
 
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, fromJust)
 import Tetromino (Tetromino(..), Shape(..), tetrominoBlocks)
+import Graphics.Gloss (Color, makeColorI)
 
+-- Types
 type Cell = Maybe Shape
 type Board = [[Cell]]
 
-boardWidth :: Int
-boardWidth = 10
-
-boardHeight :: Int
+boardWidth, boardHeight :: Int
+boardWidth  = 10
 boardHeight = 20
 
--- Creates an empty board filled with Nothing (empty cells)
+-- Initialize an empty board
 emptyBoard :: Board
 emptyBoard = replicate boardHeight (replicate boardWidth Nothing)
 
--- Draws the board to the terminal with borders
-drawBoard :: Board -> IO ()
-drawBoard board = do
-    putStrLn "\ESC[H\ESC[2J"  -- Clear screen
-    putStrLn $ "┌" ++ replicate (boardWidth * 2) '─' ++ "┐"
-    mapM_ drawRow board
-    putStrLn $ "└" ++ replicate (boardWidth * 2) '─' ++ "┘"
-  where
-    drawRow row = putStrLn $ "│" ++ concatMap drawCell row ++ "│"
-    drawCell Nothing       = ". "
-    drawCell (Just shape)  = colorize shape
-
--- Maps shapes to colored block strings
-colorize :: Shape -> String
-colorize shape = colorCode shape ++ "██" ++ reset
-  where
-    reset = "\ESC[0m"
-    colorCode s = case s of
-        I -> "\ESC[96m"  -- Bright Cyan
-        O -> "\ESC[93m"  -- Bright Yellow
-        T -> "\ESC[95m"  -- Bright Magenta
-        S -> "\ESC[92m"  -- Bright Green
-        Z -> "\ESC[91m"  -- Bright Red
-        J -> "\ESC[94m"  -- Bright Blue
-        L -> "\ESC[33m"  -- Orange-like Yellow
-
--- Ensure the tetromino's blocks are inside the board bounds
+-- Check if a tetromino is in a valid position
 isValidPosition :: Tetromino -> Board -> Bool
 isValidPosition tetromino board = all inBounds coords && all cellEmpty coords
   where
-    coords = tetrominoBlocks tetromino
+    coords    = map (\(x, y, _) -> (x, y)) (tetrominoBlocks tetromino)
     inBounds (x, y) = x >= 0 && x < boardWidth && y >= 0 && y < boardHeight
-    cellEmpty (x, y) = isNothing(board !! y !! x)
+    cellEmpty (x, y) = isNothing (board !! y !! x)
 
--- Lock a Tetromino permanently into the board cells
+-- Merge tetromino into the board
 mergeTetromino :: Tetromino -> Board -> Board
-mergeTetromino tetromino board = foldr place board (tetrominoBlocks tetromino)
+mergeTetromino tetromino board = foldr place board coords
   where
     s       = shape tetromino
-    place (x, y) rows = 
-      let oldRow = rows !! y
-          newRow = take x oldRow ++ [Just s] ++ drop (x + 1) oldRow
+    coords  = map (\(x, y, _) -> (x, y)) (tetrominoBlocks tetromino)
+    place (x, y) rows =
+      let row     = rows !! y
+          newRow  = take x row ++ [Just s] ++ drop (x + 1) row
       in take y rows ++ [newRow] ++ drop (y + 1) rows
 
--- Remove every completely filled row and return the new board plus the number of cleared lines
+-- Clear full lines and return the new board and lines cleared
 clearFullLines :: Board -> (Board, Int)
-clearFullLines board = (newRows ++ blanks, cleared)
+clearFullLines board = (replicate cleared emptyRow ++ remaining, cleared)
   where
-    (full, rest) = span (all (not . isNothing)) board
-    remaining    = filter (any isNothing) board
-    cleared      = boardHeight - length remaining
-    newRows      = replicate cleared (replicate boardWidth Nothing)
-    blanks       = remaining
+    emptyRow  = replicate boardWidth Nothing
+    remaining = filter (any isNothing) board
+    cleared   = boardHeight - length remaining
+
+-- Convert the board into drawable blocks
+boardToBlocks :: Board -> [(Int, Int, Color)]
+boardToBlocks board = 
+  [ (x, y, shapeColor s)
+  | (y, row) <- zip [0..] board
+  , (x, cell) <- zip [0..] row
+  , Just s <- [cell]
+  ]
+
+-- Shape to Color mapping
+shapeColor :: Shape -> Color
+shapeColor s = case s of
+  I -> makeColorI 0 255 255 255   -- Cyan
+  O -> makeColorI 255 255 0 255   -- Yellow
+  T -> makeColorI 160 32 240 255  -- Purple
+  S -> makeColorI 0 255 0 255     -- Green
+  Z -> makeColorI 255 0 0 255     -- Red
+  J -> makeColorI 0 0 255 255     -- Blue
+  L -> makeColorI 255 165 0 255   -- Orange

@@ -1,8 +1,6 @@
 module Main where
 
-import Game (runGame)
+import Game (gameMain)
 
 main :: IO ()
-main = do
-    putStrLn "Welcome to Tetris in Haskell!"
-    runGame
+main = gameMain
