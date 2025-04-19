@@ -10,7 +10,8 @@ module Board
   , boardToBlocks
   ) where
 
-import Data.Maybe (isNothing, fromJust)
+import Data.Maybe (isJust, isNothing)
+import Data.List (partition)
 import Tetromino (Tetromino(..), Shape(..), tetrominoBlocks)
 import Graphics.Gloss (Color, makeColorI)
 
@@ -47,11 +48,12 @@ mergeTetromino tetromino board = foldr place board coords
 
 -- Clear full lines and return the new board and lines cleared
 clearFullLines :: Board -> (Board, Int)
-clearFullLines board = (replicate cleared emptyRow ++ remaining, cleared)
-  where
-    emptyRow  = replicate boardWidth Nothing
-    remaining = filter (any isNothing) board
-    cleared   = boardHeight - length remaining
+clearFullLines bd =
+  let (fullRows, restRows) = partition (all isJust) bd
+      n                    = length fullRows
+      emptyRow             = replicate boardWidth Nothing
+      newBoard             = replicate n emptyRow ++ restRows
+  in (newBoard, n)
 
 -- Convert the board into drawable blocks
 boardToBlocks :: Board -> [(Int, Int, Color)]

@@ -150,6 +150,7 @@ lockAndSpawn state = do
                       , linesTotal = totalLines'
                       , level = level'
                       , score = score'
+                      , timeAccum = 0
                       }
     else return state { gameOver = True }
 
