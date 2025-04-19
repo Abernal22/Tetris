@@ -23,6 +23,8 @@ import Tetromino
   , tetrominoBlocks
   )
 
+import Text.Printf (printf)
+
 -- Game state
 data GameState = GameState
   { board      :: Board
@@ -74,7 +76,13 @@ drawGame state
       [ Translate (-windowWidth / 2 + 10) (windowHeight / 2 - 30)
           $ Scale 0.08 0.08
           $ Color white
-          $ Text $ "Score: " ++ show (score state) ++ "  Level: " ++ show (level state)
+          $ Text
+            $ printf
+                "Score: %d  Level: %d  Speed: %.2fs"
+                (score state)
+                (level state)
+                (dropInterval (level state))
+
       ]
   where
     tetroBlocks = tetrominoBlocks (current state)
@@ -170,3 +178,8 @@ hardDrop state = state { current = dropDown (current state) }
     dropDown t
       | isValidPosition (moveBy (0, 1) t) (board state) = dropDown (moveBy (0, 1) t)
       | otherwise = t
+
+-- How long (in seconds) between automatic drops at a given level
+dropInterval :: Int -> Float
+dropInterval lvl =
+  max 0.05 (0.4 - fromIntegral lvl * 0.03)
