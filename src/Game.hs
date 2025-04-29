@@ -15,6 +15,7 @@ import Board
 
 import Tetromino
   ( Tetromino(..)
+  , Shape(..)
   , moveBy
   , rotateRight
   , rotateLeft
@@ -29,6 +30,9 @@ import Text.Printf (printf)
 data GameState = GameState
   { board      :: Board
   , current    :: Tetromino
+  , nextShape  :: Shape
+  , holdPiece  :: Maybe Tetromino
+  , holdUsed   :: Bool
   , score      :: Int
   , level      :: Int
   , linesTotal :: Int
@@ -44,12 +48,28 @@ boardWidth, boardHeight :: Int
 boardWidth = 10
 boardHeight = 20
 
+holdPanelWidth :: Float
+holdPanelWidth = 4 * blockSize
+
+holdBoxBlocks :: Int
+holdBoxBlocks = 4
+
+holdBoxSize :: Float
+holdBoxSize = fromIntegral holdBoxBlocks * blockSize
+
+gapY :: Float
+gapY = blockSize
+
+nextBoxSize :: Float
+nextBoxSize = holdBoxSize
+
 -- Entry point
 gameMain :: IO ()
 gameMain = do
-  shape <- randomShape
-  let initTetro = Tetromino shape initialPosition 0
-      initState = GameState emptyBoard initTetro 0 0 0 0 False
+  cur <- randomShape
+  nxt <- randomShape
+  let initTetro = Tetromino cur initialPosition 0
+      initState = GameState emptyBoard initTetro nxt Nothing False 0 0 0 0 False
   playIO
     (InWindow "TETRIS" (round windowWidth, round windowHeight) (100, 100))
     black
@@ -61,7 +81,7 @@ gameMain = do
 
 -- Dimensions
 windowWidth, windowHeight :: Float
-windowWidth  = fromIntegral boardWidth * blockSize
+windowWidth  = fromIntegral boardWidth * blockSize + holdPanelWidth
 windowHeight = fromIntegral boardHeight * blockSize
 
 -- Drawing
@@ -72,8 +92,8 @@ drawGame state
       , Color white $ Translate (-85) (-30) $ Scale 0.1 0.1 $ Text ("Final Score: " ++ show (score state))
       ]
   | otherwise = return $ Pictures $
-      map drawBlock allBlocks ++
-      [ Translate (-windowWidth / 2 + 10) (windowHeight / 2 - 30)
+      map drawBlock allBlocks ++ holdPicture state ++ nextPicture state ++
+      [ Translate (-windowWidth / 2 + holdPanelWidth + 10) (windowHeight / 2 - 30)
           $ Scale 0.08 0.08
           $ Color white
           $ Text
@@ -90,11 +110,36 @@ drawGame state
     allBlocks   = tetroBlocks ++ boardBlocks
 
     drawBlock (x, y, color) =
-      Translate (fromIntegral x * blockSize - windowWidth / 2 + blockSize / 2)
+      Translate (fromIntegral x * blockSize - windowWidth / 2 + holdPanelWidth + blockSize / 2)
                 (-(fromIntegral y * blockSize - windowHeight / 2 + blockSize / 2))
       $ Color color
       $ rectangleSolid (blockSize - 2) (blockSize - 2)
 
+-- Holding areas block
+holdPicture :: GameState -> [Picture]
+holdPicture st =
+  let offsetX = -windowWidth / 2 + holdPanelWidth / 2
+      offsetY =  windowHeight / 2 - holdBoxSize / 2   -- centre vertically
+      factor  = holdBoxSize / (fromIntegral holdBoxBlocks * blockSize)
+
+      mini (x,y,col) =
+        Translate (fromIntegral x * blockSize * factor)
+                  (-(fromIntegral y * blockSize * factor))
+          $ Scale factor factor
+          $ Color col
+          $ rectangleSolid (blockSize - 2) (blockSize - 2)
+
+      blockPics = case holdPiece st of
+                    Nothing -> []
+                    Just h  -> map mini $
+                               tetrominoBlocks (h { position = (0,0)
+                                                  , orientation = 0 })
+  in  [ Translate offsetX offsetY
+          $ Color white $ rectangleWire holdBoxSize holdBoxSize
+      , Translate (offsetX + 4) (offsetY - holdBoxSize/2 - 16)
+          $ Scale 0.08 0.08 $ Color white $ Text "HOLD"
+      ] ++
+      [ Translate offsetX offsetY $ Pictures blockPics ]
 
 -- Handle keyboard input
 handleEvent :: Event -> GameState -> IO GameState
@@ -107,6 +152,7 @@ handleEvent event state
       EventKey (Char 'w') Down _ _ -> return $ tryRotateCurrent rotateRight state
       EventKey (Char 'q') Down _ _ -> return $ tryRotateCurrent rotateLeft state
       EventKey (SpecialKey KeySpace) Down _ _ -> return $ hardDrop state
+      EventKey (Char 'c') Down _ _ -> tryHold state
       _ -> return state
 
 
@@ -150,17 +196,21 @@ lockAndSpawn state = do
       totalLines'                  = linesTotal state + linesCleared
       level'                       = totalLines' `div` 10
       score'                       = score state + scoreForLines linesCleared (level state)
-  shape <- randomShape
-  let spawn = Tetromino shape initialPosition 0
+  let shape = nextShape state
+      spawn = Tetromino shape initialPosition 0
   if isValidPosition spawn clearedBoard
-    then return state { board = clearedBoard
-                      , current = spawn
-                      , linesTotal = totalLines'
-                      , level = level'
-                      , score = score'
-                      , timeAccum = 0
-                      }
-    else return state { gameOver = True }
+    then do
+    nxt <- randomShape
+    pure state { board = clearedBoard
+               , current = spawn
+               , nextShape = nxt
+               , linesTotal = totalLines'
+               , level = level'
+               , score = score'
+               , timeAccum = 0
+               , holdUsed = False
+               }
+    else pure state { gameOver = True }
 
 -- Scoring logic
 scoreForLines :: Int -> Int -> Int
@@ -183,3 +233,45 @@ hardDrop state = state { current = dropDown (current state) }
 dropInterval :: Int -> Float
 dropInterval lvl =
   max 0.05 (0.4 - fromIntegral lvl * 0.03)
+
+-- If the slot is empty, store the current piece and spawn a fresh one
+tryHold :: GameState -> IO GameState
+tryHold st
+  | holdUsed st = pure st
+  | otherwise =
+    case holdPiece st of
+      Nothing -> do
+        shape <- randomShape
+        let spawn   = Tetromino shape initialPosition 0
+            newCurr = reset (current st)
+        pure st { current   = spawn
+                , holdPiece = Just newCurr
+                , holdUsed  = True }
+      Just h  -> do
+        let newCurr = reset (current st)
+        pure st { current   = reset h
+                , holdPiece = Just newCurr
+                , holdUsed  = True }
+  where
+    reset t = t { position = initialPosition, orientation = 0 }   
+
+-- UI for previewing next block
+nextPicture :: GameState -> [Picture]
+nextPicture st =
+  let offsetX = -windowWidth / 2 + holdPanelWidth / 2
+      offsetY = windowHeight / 2 - holdBoxSize - gapY - nextBoxSize / 2
+      factor = nextBoxSize / (fromIntegral holdBoxBlocks * blockSize)
+      mini (x, y, col) =
+        Translate (fromIntegral x * blockSize * factor)
+                  (-(fromIntegral y * blockSize * factor))
+          $ Scale factor factor
+          $ Color col
+          $ rectangleSolid (blockSize - 2) (blockSize - 2)
+      tetro = Tetromino (nextShape st) (0, 0) 0
+      blocks = map mini $ tetrominoBlocks tetro
+  in [ Translate offsetX offsetY $ Pictures blocks
+        , Translate offsetX offsetY
+          $ Color white $ rectangleWire nextBoxSize nextBoxSize
+        , Translate (offsetX + 4) (offsetY - nextBoxSize/2 - 16)
+          $ Scale 0.08 0.08 $ Color white $ Text "NEXT"
+      ]
