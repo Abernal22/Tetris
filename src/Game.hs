@@ -32,7 +32,6 @@ data GameState = GameState
   , current    :: Tetromino
   , nextShape  :: Shape
   , holdPiece  :: Maybe Tetromino
-  , holdUsed   :: Bool
   , score      :: Int
   , level      :: Int
   , linesTotal :: Int
@@ -69,7 +68,7 @@ gameMain = do
   cur <- randomShape
   nxt <- randomShape
   let initTetro = Tetromino cur initialPosition 0
-      initState = GameState emptyBoard initTetro nxt Nothing False 0 0 0 0 False
+      initState = GameState emptyBoard initTetro nxt Nothing 0 0 0 0 False
   playIO
     (InWindow "TETRIS" (round windowWidth, round windowHeight) (100, 100))
     black
@@ -208,7 +207,6 @@ lockAndSpawn state = do
                , level = level'
                , score = score'
                , timeAccum = 0
-               , holdUsed = False
                }
     else pure state { gameOver = True }
 
@@ -237,21 +235,17 @@ dropInterval lvl =
 -- If the slot is empty, store the current piece and spawn a fresh one
 tryHold :: GameState -> IO GameState
 tryHold st
-  | holdUsed st = pure st
-  | otherwise =
-    case holdPiece st of
+    = case holdPiece st of
       Nothing -> do
         shape <- randomShape
         let spawn   = Tetromino shape initialPosition 0
             newCurr = reset (current st)
         pure st { current   = spawn
-                , holdPiece = Just newCurr
-                , holdUsed  = True }
+                , holdPiece = Just newCurr}
       Just h  -> do
         let newCurr = reset (current st)
         pure st { current   = reset h
-                , holdPiece = Just newCurr
-                , holdUsed  = True }
+                , holdPiece = Just newCurr}
   where
     reset t = t { position = initialPosition, orientation = 0 }   
 
