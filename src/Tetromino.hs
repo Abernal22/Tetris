@@ -80,7 +80,6 @@ tetrominoPositions (Tetromino s (px, py) ori) =
   ]
 
 -- Movement/Rotation helpers
-
 moveBy :: (Int, Int) -> Tetromino -> Tetromino
 moveBy (dx, dy) t = t { position = (x + dx, y + dy) }
   where (x, y) = position t

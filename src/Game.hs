@@ -25,28 +25,29 @@ import Tetromino
 
 import Text.Printf (printf)
 
--- | One block is 20×20 pixels
+-- One block is 20×20 pixels
 blockSize :: Float
 blockSize = 20
 
--- | Left panel width in blocks (for Hold/Next & status)
+-- Left panel width in blocks (for Hold/Next & status)
 panelWidthBlocks :: Int
 panelWidthBlocks = 6
 
+-- Left panel offsets
 panelOffset :: Float
 panelOffset = fromIntegral panelWidthBlocks * blockSize
 
--- | Board dimensions (in blocks)
+-- Board dimensions (in blocks)
 boardWidth, boardHeight :: Int
 boardWidth  = 10
 boardHeight = 20
 
--- | Window dimensions (board + left panel)
+-- Window dimensions (board + left panel)
 windowWidth, windowHeight :: Float
 windowWidth  = fromIntegral boardWidth  * blockSize + panelOffset
 windowHeight = fromIntegral boardHeight * blockSize
 
--- | Full game state with hold/next
+-- Full game state with hold/next
 data GameState = GameState
   { board      :: Board
   , current    :: Tetromino
@@ -58,9 +59,10 @@ data GameState = GameState
   , linesTotal :: Int
   , timeAccum  :: Float
   , gameOver   :: Bool
+  , paused     :: Bool
   }
 
--- | Start with two random pieces
+-- Start with two random pieces
 gameMain :: IO ()
 gameMain = do
   s1 <- randomShape
@@ -78,6 +80,7 @@ gameMain = do
         , linesTotal = 0
         , timeAccum  = 0
         , gameOver   = False
+        , paused     = False
         }
   playIO
     (InWindow "TETRIS" (round windowWidth, round windowHeight) (100,100))
@@ -88,11 +91,10 @@ gameMain = do
     handleEvent
     updateGame
 
--- | Draw one frame
+-- Draw one frame
 drawGame :: GameState -> IO Picture
-drawGame st =
-  if gameOver st
-    then return $ Pictures
+drawGame st
+  | gameOver st = return $ Pictures
       [ Color red
           $ Translate (-80) 0
           $ Scale 0.3 0.3
@@ -102,53 +104,116 @@ drawGame st =
           $ Scale 0.2 0.2
           $ Text ("Final Score: " ++ show (score st))
       ]
-    else return $ Pictures $
-      -- 1) Board border
+  | paused st   = return $ Pictures (basePics ++ [pauseOverlay])
+  | otherwise   = return $ Pictures basePics
+  where
+    -- Common pictures (board, pieces, boxes, labels, status)
+    basePics :: [Picture]
+    basePics =
+      --  Main board border
       [ Color white
           $ Translate boardCenterX 0
           $ rectangleWire
               (fromIntegral boardWidth  * blockSize)
               (fromIntegral boardHeight * blockSize)
       ]
-      -- 2) Locked cells + active piece
+      -- Locked cells and falling tetromino
       ++ map drawBlock (boardToBlocks (board st))
       ++ map drawBlock (tetrominoBlocks (current st))
-      -- 3) Hold box, piece, label
+      -- Hold box border, held piece, label
       ++ [ Color white
              $ Translate panelCenterX holdCenterY
-             $ rectangleWire (4*blockSize) (4*blockSize)
+             $ rectangleWire
+                 (fromIntegral holdBoxWidth * blockSize)
+                 (fromIntegral holdBoxWidth * blockSize)
          , drawBoxedTetromino (holdPiece st) panelCenterX holdCenterY
-         , Translate holdLabelX holdLabelY
+         , Translate boxTextX holdLabelY
              $ Scale 0.08 0.08
              $ Color white
              $ Text "Hold"
          ]
-      -- 4) Next box, piece, label
+      -- Next box border, preview piece, label
       ++ [ Color white
              $ Translate panelCenterX previewCenterY
-             $ rectangleWire (4*blockSize) (4*blockSize)
+             $ rectangleWire
+                 (fromIntegral previewBoxWidth * blockSize)
+                 (fromIntegral previewBoxWidth * blockSize)
          , drawBoxedTetromino (Just (nextT st)) panelCenterX previewCenterY
-         , Translate previewLabelX previewLabelY
+         , Translate boxTextX previewLabelY
              $ Scale 0.08 0.08
              $ Color white
              $ Text "Next"
          ]
-      -- 5) Status text, stacked vertically under Next
-      ++ [ Translate statusX statusLine1Y
+      -- Status text stacked under Next box
+      ++ [ Translate statusStartX statusLine1Y
              $ Scale 0.08 0.08
              $ Color white
              $ Text (printf "Score: %d" (score st))
-         , Translate statusX statusLine2Y
+         , Translate statusStartX statusLine2Y
              $ Scale 0.08 0.08
              $ Color white
              $ Text (printf "Level: %d" (level st))
-         , Translate statusX statusLine3Y
+         , Translate statusStartX statusLine3Y
              $ Scale 0.08 0.08
              $ Color white
              $ Text (printf "Speed: %.2fs" (dropInterval (level st)))
          ]
-  where
-    -- Draw a single block at board coords
+
+    -- overlay for paused state
+    pauseOverlay :: Picture
+    pauseOverlay =
+      Color white
+        $ Translate (-60) 0
+        $ Scale 0.2 0.2
+        $ Text "Paused"
+
+    -- box dimensions in blocks
+    holdBoxWidth, previewBoxWidth :: Int
+    holdBoxWidth    = 5
+    previewBoxWidth = 5
+
+    -- spacing parameters
+    boxSpacing        = 20    -- px between Hold and Next boxes
+    statusPadding     = 20    -- px below Next box before status
+    statusLineSpacing = 30    -- px between status lines
+
+    -- panel and board centers
+    panelCenterX = -windowWidth/2 + panelOffset/2
+    boardCenterX = panelOffset
+                   - windowWidth/2
+                   + (fromIntegral boardWidth * blockSize)/2
+
+    -- Y centers of Hold and Next boxes
+    holdCenterY    = windowHeight/2
+                     - (fromIntegral holdBoxWidth * blockSize)/2
+                     - 10
+    previewCenterY = holdCenterY
+                     - fromIntegral holdBoxWidth * blockSize
+                     - boxSpacing
+
+    -- Y positions for the “Hold” and “Next” labels
+    holdLabelY    = holdCenterY
+                    - (fromIntegral holdBoxWidth * blockSize)/2
+                    - 15
+    previewLabelY = previewCenterY
+                    - (fromIntegral previewBoxWidth * blockSize)/2
+                    - 15
+
+    statusStartX :: Float
+    statusStartX = (-windowWidth) / 2 + 26
+
+    boxTextX :: Float
+    boxTextX = (-windowWidth) / 2 + 50
+
+    -- starting Y and offsets for status text
+    statusStartY  = previewCenterY
+                    - (fromIntegral previewBoxWidth * blockSize)/2
+                    - statusPadding - 40
+    statusLine1Y  = statusStartY
+    statusLine2Y  = statusStartY - statusLineSpacing
+    statusLine3Y  = statusStartY - 2 * statusLineSpacing
+
+    -- helper to draw a single board block
     drawBlock (x,y,col) =
       Translate
         ( fromIntegral x * blockSize
@@ -163,9 +228,9 @@ drawGame st =
       $ Color col
       $ rectangleSolid (blockSize - 2) (blockSize - 2)
 
-    -- Draw a tetromino inside a 4×4 box
+    -- helper to draw a tetromino inside a box
     drawBoxedTetromino :: Maybe Tetromino -> Float -> Float -> Picture
-    drawBoxedTetromino Nothing  _  _  = Blank
+    drawBoxedTetromino Nothing _ _ = Blank
     drawBoxedTetromino (Just t) cx cy =
       let t0 = t { position = (0,0) }
       in Pictures
@@ -176,40 +241,14 @@ drawGame st =
          | (x,y,col) <- tetrominoBlocks t0
          ]
 
-    -- Vertical gap between Hold and Next
-    boxSpacing :: Float
-    boxSpacing = 20
-
-    -- Panel & board centers
-    panelCenterX   = -windowWidth/2 + panelOffset/2
-    holdCenterY    =  windowHeight/2   - 2*blockSize - 10
-    previewCenterY = holdCenterY      - 4*blockSize - boxSpacing
-    boardCenterX   = panelOffset
-                     - windowWidth/2
-                     + (fromIntegral boardWidth * blockSize)/2
-
-    -- Center labels/status under 80px-wide box
-    labelOffsetX    = blockSize/2
-    holdLabelX      = panelCenterX - labelOffsetX
-    previewLabelX   = panelCenterX - labelOffsetX
-    statusX         = panelCenterX - labelOffsetX
-
-    -- Label Y positions
-    holdLabelY      = holdCenterY    - (4*blockSize/2) - 10
-    previewLabelY   = previewCenterY - (4*blockSize/2) - 10
-
-    -- Status text stack
-    statusStartY    = previewLabelY - 20
-    statusSpacing   = 15
-    statusLine1Y    = statusStartY
-    statusLine2Y    = statusStartY - statusSpacing
-    statusLine3Y    = statusStartY - 2 * statusSpacing
 
 -- | Handle key events
 handleEvent :: Event -> GameState -> IO GameState
 handleEvent ev st
   | gameOver st = return st
   | otherwise   = case ev of
+      EventKey (SpecialKey KeyEsc) Down _ _ -> 
+        return st { paused = not (paused st)}
       EventKey (Char 'a') Down _ _ -> return $ tryMove (-1,0) st
       EventKey (Char 'd') Down _ _ -> return $ tryMove (1,0) st
       EventKey (Char 's') Down _ _ -> return $ tryMove (0,1) st
@@ -260,6 +299,7 @@ holdCurrent st
 
 -- | Gravity tick; lock & spawn when needed
 updateGame :: Float -> GameState -> IO GameState
+updateGame _ st | gameOver st || paused st = return st
 updateGame dt st
   | gameOver st = return st
   | timeAccum st + dt >= dropInterval (level st) = do
