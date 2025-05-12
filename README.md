@@ -83,5 +83,6 @@ cabal run tetris       # run the executable named `tetris`
 
 - **Align Text**: all text in panel could be centered better. Text in game over screen isn't perfectly centered.
 - **General UI improvments**: The white on black is not the best for overlaying text for menus etc. We could make the UI better looking in general.
+- **Square Rotation Bug**: Square tetromino blocks wobble when rotated and don't react appropriately. Not game breaking but definitely not proper. 
 
 ---
