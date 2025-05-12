@@ -109,9 +109,9 @@ drawGame st =
                 $ scale 0.1 0.1
                 $ text "Next"
       holdLabel = color white
-                $ translate panelX (holdY + halfBox + 10)
-                $ scale 0.1 0.1
-                $ text "Hold"
+          $ translate (panelX - 12) (holdY + halfBox + 20)
+          $ scale 0.1 0.1
+          $ text "Hold"
 
       -- Score & Level, stacked bottom-left
       scoreText = color white
@@ -131,14 +131,23 @@ drawGame st =
         $ color col
         $ rectangleSolid (blockSize - 2) (blockSize - 2)
 
+      -- Center blocks around (0,0)
+      centeredBlocks :: [(Int, Int, a)] -> [(Int, Int, a)]
+      centeredBlocks blocks =
+        let xs = map (\(x,_,_) -> x) blocks
+            ys = map (\(_,y,_) -> y) blocks
+            cx = (minimum xs + maximum xs) `div` 2
+            cy = (minimum ys + maximum ys) `div` 2
+        in [ (x - cx, y - cy, col) | (x, y, col) <- blocks ]
+
       -- Main board blocks
       mainBlocks = tetrominoBlocks (current st) ++ boardToBlocks (board st)
 
       -- Upcoming piece centered in Next box
-      nextBlocks  = tetrominoBlocks ((next st) { position = (0,0) })
+      nextBlocks  = centeredBlocks $ tetrominoBlocks ((next st) { position = (0,0) })
 
       -- Held piece (if any) centered in Hold box
-      holdBlocks  = maybe [] (\t -> tetrominoBlocks (t { position = (0,0) })) (hold st)
+      holdBlocks  = maybe [] (centeredBlocks . tetrominoBlocks . (\t -> t { position = (0,0) })) (hold st)
 
     in return $ pictures
          ( [ boardBox
