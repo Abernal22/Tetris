@@ -7,7 +7,7 @@ This repository contains a Haskell implementation of a Tetris game using the `gl
 ## 1. Overview
 
 - **Course**: CS 357 (Functional Programming), University of New Mexico
-- **Author**: _Your Name_ (UNM NetID)
+- **Author**: Alex Bernal, Joshua Rivera
 - **Description**: A classic Tetris clone featuring:
   - Seven tetromino shapes
   - Hold & next‐piece preview windows
@@ -40,13 +40,14 @@ cabal install gloss
 
 ```plaintext
 project-root/
+├── app/
+|   ├── Main.hs        -- entry point (calls gameMain)
 ├── src/
-│   ├── Main.hs        -- entry point (calls gameMain)
 │   ├── Game.hs        -- game loop, rendering, input, updates
 │   ├── Board.hs       -- board state, line clearing, collision
 │   └── Tetromino.hs   -- shapes, rotations, colors, random generator
-├── cs357-tetris.cabal -- Cabal package file
-├── stack.yaml         -- Stack resolver & dependencies
+├── tetriS.cabal       -- Cabal package file
+├── cabal.project 
 ├── README.md          -- this file
 └── .gitignore         -- ignores build artifacts
 ```
@@ -74,31 +75,11 @@ cabal run tetris       # run the executable named `tetris`
 - **A / D / S**: move tetromino left/right/down
 - **W / Q**: rotate right / left
 - **Space**: hard drop
+- **Esc**: Pause
 
 ---
 
-## 5. Submission Contents
-
-Include **exactly** these files & directories in your zip or repo:
-
-- `src/` directory:
-  - `Main.hs`  
-  - `Game.hs`
-  - `Board.hs`
-  - `Tetromino.hs`
-- `cs357-tetris.cabal`
-- `stack.yaml` (if using Stack)
-- `README.md` (this file)
-- `.gitignore`
-
-**Do not** include:
-- `dist/`, `.stack-work/`, `*.hi`, `*.o`, or other build artifacts
-
-ZIP it as `netid-cs357-tetris.zip` (replace `netid` with your UNM NetID) and submit via UNM D2L.
-
----
-
-## 6. Sample Auxiliary Files
+## 5. Sample Auxiliary Files
 
 <details>
 <summary><code>Main.hs</code></summary>
@@ -159,12 +140,3 @@ dist/
 </details>
 
 ---
-
-## 7. Acknowledgments & Tips
-
-- All code is commented and organized by module.
-- Ensure `Game.hs` exports `gameMain`, and `Main.hs` calls it.
-- Test gameplay to verify no clipping on I-tetromino in preview/hold.
-- Include this README at root so graders can quickly build & run.
-
-Good luck with your CS 357 submission!
