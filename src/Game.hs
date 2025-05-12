@@ -15,9 +15,6 @@ import Board
 
 import Tetromino
   ( Tetromino(..)
-  , moveBy
-  , rotateRight
-  , rotateLeft
   , randomShape
   , initialPosition
   , tetrominoBlocks
@@ -44,15 +41,18 @@ boardWidth, boardHeight :: Int
 boardWidth  = 10
 boardHeight = 20
 
--- | Window size in pixels (board + left panel)
+-- | Window dimensions (board + left panel)
 windowWidth, windowHeight :: Float
 windowWidth  = fromIntegral boardWidth  * blockSize + panelOffset
 windowHeight = fromIntegral boardHeight * blockSize
 
--- | Game state, including hold/next logic
+-- | Full game state with hold/next
 data GameState = GameState
   { board      :: Board
   , current    :: Tetromino
+  , nextT      :: Tetromino
+  , holdPiece  :: Maybe Tetromino
+  , usedHold   :: Bool       -- one hold per drop
   , score      :: Int
   , level      :: Int
   , linesTotal :: Int
@@ -60,20 +60,25 @@ data GameState = GameState
   , gameOver   :: Bool
   }
 
--- Constants
-blockSize :: Float
-blockSize = 20
-
-boardWidth, boardHeight :: Int
-boardWidth = 10
-boardHeight = 20
-
--- Entry point
+-- | Start with two random pieces
 gameMain :: IO ()
 gameMain = do
-  shape <- randomShape
-  let initTetro = Tetromino shape initialPosition 0
-      initState = GameState emptyBoard initTetro 0 0 0 0 False
+  s1 <- randomShape
+  s2 <- randomShape
+  let t1 = Tetromino s1 initialPosition 0
+      t2 = Tetromino s2 initialPosition 0
+      initSt = GameState
+        { board      = emptyBoard
+        , current    = t1
+        , nextT      = t2
+        , holdPiece  = Nothing
+        , usedHold   = False
+        , score      = 0
+        , level      = 0
+        , linesTotal = 0
+        , timeAccum  = 0
+        , gameOver   = False
+        }
   playIO
     (InWindow "TETRIS" (round windowWidth, round windowHeight) (100,100))
     black
@@ -83,12 +88,7 @@ gameMain = do
     handleEvent
     updateGame
 
--- Dimensions
-windowWidth, windowHeight :: Float
-windowWidth  = fromIntegral boardWidth * blockSize
-windowHeight = fromIntegral boardHeight * blockSize
-
--- Drawing
+-- | Draw one frame
 drawGame :: GameState -> IO Picture
 drawGame st =
   if gameOver st
@@ -102,96 +102,197 @@ drawGame st =
           $ Scale 0.2 0.2
           $ Text ("Final Score: " ++ show (score st))
       ]
-  | otherwise = return $ Pictures $
-      map drawBlock allBlocks ++
-      [ Translate (-windowWidth / 2 + 10) (windowHeight / 2 - 30)
-          $ Scale 0.08 0.08
-          $ Color white
-          $ Text
-            $ printf
-                "Score: %d  Level: %d  Speed: %.2fs"
-                (score state)
-                (level state)
-                (dropInterval (level state))
-
+    else return $ Pictures $
+      -- 1) Board border
+      [ Color white
+          $ Translate boardCenterX 0
+          $ rectangleWire
+              (fromIntegral boardWidth  * blockSize)
+              (fromIntegral boardHeight * blockSize)
       ]
+      -- 2) Locked cells + active piece
+      ++ map drawBlock (boardToBlocks (board st))
+      ++ map drawBlock (tetrominoBlocks (current st))
+      -- 3) Hold box, piece, label
+      ++ [ Color white
+             $ Translate panelCenterX holdCenterY
+             $ rectangleWire (4*blockSize) (4*blockSize)
+         , drawBoxedTetromino (holdPiece st) panelCenterX holdCenterY
+         , Translate holdLabelX holdLabelY
+             $ Scale 0.08 0.08
+             $ Color white
+             $ Text "Hold"
+         ]
+      -- 4) Next box, piece, label
+      ++ [ Color white
+             $ Translate panelCenterX previewCenterY
+             $ rectangleWire (4*blockSize) (4*blockSize)
+         , drawBoxedTetromino (Just (nextT st)) panelCenterX previewCenterY
+         , Translate previewLabelX previewLabelY
+             $ Scale 0.08 0.08
+             $ Color white
+             $ Text "Next"
+         ]
+      -- 5) Status text, stacked vertically under Next
+      ++ [ Translate statusX statusLine1Y
+             $ Scale 0.08 0.08
+             $ Color white
+             $ Text (printf "Score: %d" (score st))
+         , Translate statusX statusLine2Y
+             $ Scale 0.08 0.08
+             $ Color white
+             $ Text (printf "Level: %d" (level st))
+         , Translate statusX statusLine3Y
+             $ Scale 0.08 0.08
+             $ Color white
+             $ Text (printf "Speed: %.2fs" (dropInterval (level st)))
+         ]
   where
-    tetroBlocks = tetrominoBlocks (current state)
-    boardBlocks = boardToBlocks (board state)
-    allBlocks   = tetroBlocks ++ boardBlocks
-
-    drawBlock (x, y, color) =
-      Translate (fromIntegral x * blockSize - windowWidth / 2 + blockSize / 2)
-                (-(fromIntegral y * blockSize - windowHeight / 2 + blockSize / 2))
-      $ Color color
+    -- Draw a single block at board coords
+    drawBlock (x,y,col) =
+      Translate
+        ( fromIntegral x * blockSize
+          - windowWidth/2
+          + blockSize/2
+          + panelOffset
+        )
+        (-( fromIntegral y * blockSize
+            - windowHeight/2
+            + blockSize/2
+          ))
+      $ Color col
       $ rectangleSolid (blockSize - 2) (blockSize - 2)
 
+    -- Draw a tetromino inside a 4×4 box
+    drawBoxedTetromino :: Maybe Tetromino -> Float -> Float -> Picture
+    drawBoxedTetromino Nothing  _  _  = Blank
+    drawBoxedTetromino (Just t) cx cy =
+      let t0 = t { position = (0,0) }
+      in Pictures
+         [ Translate (cx + fromIntegral x*blockSize)
+                     (cy + fromIntegral y*blockSize)
+             $ Color col
+             $ rectangleSolid (blockSize - 2) (blockSize - 2)
+         | (x,y,col) <- tetrominoBlocks t0
+         ]
 
--- Handle keyboard input
+    -- Vertical gap between Hold and Next
+    boxSpacing :: Float
+    boxSpacing = 20
+
+    -- Panel & board centers
+    panelCenterX   = -windowWidth/2 + panelOffset/2
+    holdCenterY    =  windowHeight/2   - 2*blockSize - 10
+    previewCenterY = holdCenterY      - 4*blockSize - boxSpacing
+    boardCenterX   = panelOffset
+                     - windowWidth/2
+                     + (fromIntegral boardWidth * blockSize)/2
+
+    -- Center labels/status under 80px-wide box
+    labelOffsetX    = blockSize/2
+    holdLabelX      = panelCenterX - labelOffsetX
+    previewLabelX   = panelCenterX - labelOffsetX
+    statusX         = panelCenterX - labelOffsetX
+
+    -- Label Y positions
+    holdLabelY      = holdCenterY    - (4*blockSize/2) - 10
+    previewLabelY   = previewCenterY - (4*blockSize/2) - 10
+
+    -- Status text stack
+    statusStartY    = previewLabelY - 20
+    statusSpacing   = 15
+    statusLine1Y    = statusStartY
+    statusLine2Y    = statusStartY - statusSpacing
+    statusLine3Y    = statusStartY - 2 * statusSpacing
+
+-- | Handle key events
 handleEvent :: Event -> GameState -> IO GameState
-handleEvent event state
-  | gameOver state = return state
-  | otherwise = case event of
-      EventKey (Char 'a') Down _ _ -> return $ tryMoveCurrent (-1, 0) state
-      EventKey (Char 'd') Down _ _ -> return $ tryMoveCurrent (1, 0) state
-      EventKey (Char 's') Down _ _ -> return $ tryMoveCurrent (0, 1) state
-      EventKey (Char 'w') Down _ _ -> return $ tryRotateCurrent rotateRight state
-      EventKey (Char 'q') Down _ _ -> return $ tryRotateCurrent rotateLeft state
-      EventKey (SpecialKey KeySpace) Down _ _ -> return $ hardDrop state
-      _ -> return state
+handleEvent ev st
+  | gameOver st = return st
+  | otherwise   = case ev of
+      EventKey (Char 'a') Down _ _ -> return $ tryMove (-1,0) st
+      EventKey (Char 'd') Down _ _ -> return $ tryMove (1,0) st
+      EventKey (Char 's') Down _ _ -> return $ tryMove (0,1) st
+      EventKey (Char 'w') Down _ _ -> return $ tryRotate rotateRight st
+      EventKey (Char 'q') Down _ _ -> return $ tryRotate rotateLeft  st
+      EventKey (Char 'c') Down _ _ -> holdCurrent st
+      EventKey (SpecialKey KeySpace) Down _ _ -> return $ hardDrop st
+      _ -> return st
 
+-- | Move the current piece if valid
+tryMove :: (Int,Int) -> GameState -> GameState
+tryMove d st =
+  let m = moveBy d (current st)
+  in if isValidPosition m (board st) then st { current = m } else st
 
--- Time-based game updates (gravity)
+-- | Rotate with simple wall-kicks
+tryRotate :: (Tetromino -> Tetromino) -> GameState -> GameState
+tryRotate f st =
+  let raw = f (current st)
+      kicks = [ moveBy off raw | off <- [(0,0),(1,0),(-1,0),(0,-1)] ]
+      vs = filter (`isValidPosition` board st) kicks
+  in case vs of (t':_) -> st { current = t' }
+                []     -> st
+
+-- | Hold logic on 'c'
+holdCurrent :: GameState -> IO GameState
+holdCurrent st
+  | usedHold st = return st
+  | otherwise   = case holdPiece st of
+      Nothing -> do
+        s <- randomShape
+        let newHold = current st
+            newCurr = (nextT st){ position = initialPosition, orientation = 0 }
+            newNext = Tetromino s initialPosition 0
+        return st
+          { holdPiece = Just newHold
+          , current   = newCurr
+          , nextT     = newNext
+          , usedHold  = True
+          }
+      Just h -> do
+        let newCurr = h { position = initialPosition, orientation = 0 }
+        return st
+          { holdPiece = Just (current st)
+          , current   = newCurr
+          , usedHold  = True
+          }
+
+-- | Gravity tick; lock & spawn when needed
 updateGame :: Float -> GameState -> IO GameState
-updateGame _ state | gameOver state = return state
-updateGame dt state
-  | timeAccum state + dt >= interval = do
-      let afterMove = tryMoveCurrent (0, 1) state
-      if position (current afterMove) == position (current state)
-        then lockAndSpawn state { timeAccum = 0 }
-        else return afterMove { timeAccum = 0 }
-  | otherwise = return state { timeAccum = timeAccum state + dt }
- where
-  interval = max 0.05 (0.4 - fromIntegral (level state) * 0.03)
+updateGame dt st
+  | gameOver st = return st
+  | timeAccum st + dt >= dropInterval (level st) = do
+      let st'   = st { timeAccum = 0 }
+          moved = tryMove (0,1) st'
+      if position (current moved) == position (current st)
+        then lockAndNext st'
+        else return moved
+  | otherwise = return st { timeAccum = timeAccum st + dt }
 
--- Movement
-tryMoveCurrent :: (Int, Int) -> GameState -> GameState
-tryMoveCurrent delta state
-  | isValidPosition moved (board state) = state { current = moved }
-  | otherwise                           = state
- where
-  moved = moveBy delta (current state)
-
--- Rotation with kicks
-tryRotateCurrent :: (Tetromino -> Tetromino) -> GameState -> GameState
-tryRotateCurrent rotate state = case firstValid rotated of
-    Just t  -> state { current = t }
-    Nothing -> state
- where
-  raw     = rotate (current state)
-  kicks   = [(0, 0), (1, 0), (-1, 0), (0, -1)]
-  rotated = [ moveBy off raw | off <- kicks ]
-  firstValid = foldr (\t acc -> if isValidPosition t (board state) then Just t else acc) Nothing
-
--- Lock tetromino and spawn new one
-lockAndSpawn :: GameState -> IO GameState
-lockAndSpawn state = do
-  let lockedBoard                  = mergeTetromino (current state) (board state)
-      (clearedBoard, linesCleared) = clearFullLines lockedBoard
-      totalLines'                  = linesTotal state + linesCleared
-      level'                       = totalLines' `div` 10
-      score'                       = score state + scoreForLines linesCleared (level state)
-  shape <- randomShape
-  let spawn = Tetromino shape initialPosition 0
-  if isValidPosition spawn clearedBoard
-    then return state { board = clearedBoard
-                      , current = spawn
-                      , linesTotal = totalLines'
-                      , level = level'
-                      , score = score'
-                      , timeAccum = 0
-                      }
-    else return state { gameOver = True }
+-- | Lock piece, clear lines, update score/level, spawn next piece
+lockAndNext :: GameState -> IO GameState
+lockAndNext st = do
+  let merged   = mergeTetromino (current st) (board st)
+      (bd',n)  = clearFullLines merged
+      tlines   = linesTotal st + n
+      lvl      = tlines `div` 10
+      sc'      = score st + scoreForLines n (level st)
+      nextCur  = (nextT st){ position = initialPosition, orientation = 0 }
+  s <- randomShape
+  let newNext = Tetromino s initialPosition 0
+  if isValidPosition nextCur bd'
+    then return st
+      { board      = bd'
+      , current    = nextCur
+      , nextT      = newNext
+      , usedHold   = False
+      , score      = sc'
+      , linesTotal = tlines
+      , level      = lvl
+      , timeAccum  = 0
+      }
+    else return st { gameOver = True }
 
 -- | Scoring per lines cleared
 scoreForLines :: Int -> Int -> Int
@@ -210,7 +311,6 @@ hardDrop st =
         | otherwise                                   = t
   in st { current = go (current st) }
 
--- | Seconds between automatic drops (decreases with level)
+-- | Seconds between automatic drops (decrements with level)
 dropInterval :: Int -> Float
-dropInterval lvl =
-  max 0.05 (0.4 - fromIntegral lvl * 0.03)
+dropInterval lvl = max 0.05 (0.4 - fromIntegral lvl * 0.03)
