@@ -17,26 +17,7 @@ This repository contains a Haskell implementation of a Tetris game using the `gl
 
 ---
 
-## 2. Prerequisites
-
-- [GHC 8.10 or later](https://www.haskell.org/ghc/)
-- [Stack](https://docs.haskellstack.org/) (recommended) **or** `cabal-install` & `cabal` CLI
-- `gloss` library (graphics & input)
-
-Install via Stack:
-```bash
-stack install gloss
-```
-
-Or via Cabal:
-```bash
-cabal update
-cabal install gloss
-```
-
----
-
-## 3. Project Structure
+## 2. Project Structure
 
 ```plaintext
 project-root/
@@ -54,7 +35,7 @@ project-root/
 
 ---
 
-## 4. Build & Run Instructions
+## 3. Build & Run Instructions
 
 ### With Stack
 ```bash
