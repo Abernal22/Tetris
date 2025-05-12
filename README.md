@@ -79,64 +79,9 @@ cabal run tetris       # run the executable named `tetris`
 
 ---
 
-## 5. Sample Auxiliary Files
+## 5. Future improvements and known bugs
 
-<details>
-<summary><code>Main.hs</code></summary>
-```hs
-module Main where
-import Game (gameMain)
-
-main :: IO ()
-main = gameMain
-```
-</details>
-
-<details>
-<summary><code>cs357-tetris.cabal</code></summary>
-```cabal
-name:                cs357-tetris
-version:             0.1.0.0
-build-type:          Simple
-cabal-version:       >=1.10
-
-executable tetris
-  main-is:           Main.hs
-  hs-source-dirs:    src
-  ghc-options:       -Wall -threaded
-  build-depends:
-    base >=4.7 && <5,
-    gloss >=1.13.2
-  default-language:  Haskell2010
-```
-</details>
-
-<details>
-<summary><code>stack.yaml</code></summary>
-```yaml
-resolver: lts-18.18  # or newer
-packages:
-- .
-extra-deps: []
-
-# for custom setup
-flags: {}
-extra-package-dbs: []
-```
-</details>
-
-<details>
-<summary><code>.gitignore</code></summary>
-```gitignore
-.stack-work/
-dist/
-*.hi
-*.o
-*.prof
-.stack-work/
-.cabal-sandbox/
-.DS_Store
-```
-</details>
+- **Align Text**: all text in panel could be centered better. Text in game over screen isn't perfectly centered.
+- **General UI improvments**: The white on black is not the best for overlaying text for menus etc. We could make the UI better looking in general.
 
 ---
