@@ -4,92 +4,87 @@ module Tetromino
   , Orientation
   , initialPosition
   , tetrominoBlocks
-  , tetrominoPositions
   , randomShape
   , moveBy
   , rotateRight
   , rotateLeft
   ) where
 
-import System.Random (randomRIO)
-import Graphics.Gloss (Color, makeColorI)
+import System.Random     (randomRIO)
+import Brillo.Data.Color (Color, cyan, yellow, magenta, green, red, blue, orange)
 
--- Position on the board: (x, y)
-type Position = (Int, Int)
-
--- 0, 1, 2, 3 (clockwise quarter-turns)
-type Orientation = Int
-
--- Seven classic tetris shapes
+-- | Seven standard Tetris shapes
 data Shape = I | O | T | S | Z | J | L
   deriving (Eq, Show, Enum, Bounded)
 
--- Tetromino has a shape, position, and orientation
+-- | 0–3 possible orientations
+type Orientation = Int
+
+-- | A Tetromino has a shape, a grid position (x,y), and an orientation
 data Tetromino = Tetromino
   { shape       :: Shape
-  , position    :: Position
+  , position    :: (Int, Int)
   , orientation :: Orientation
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
--- Initial spawn position near center of board
-initialPosition :: Position
-initialPosition = (5, 0)
+-- | Starting spawn position centered at top
+type Point = (Int,Int)
+initialPosition :: Point
+initialPosition = (4, 0)
 
--- Relative block layouts for shape in orientation 0
-baseCoords :: Shape -> [Position]
-baseCoords I = [(-2, 0), (-1, 0), (0, 0), (1, 0)]
-baseCoords O = [(0, 0), (1, 0), (0, 1), (1, 1)]
-baseCoords T = [(-1, 0), (0, 0), (1, 0), (0, 1)]
-baseCoords S = [(-1, 1), (0, 1), (0, 0), (1, 0)]
-baseCoords Z = [(-1, 0), (0, 0), (0, 1), (1, 1)]
-baseCoords J = [(-1, 0), (-1, 1), (0, 0), (1, 0)]
-baseCoords L = [(-1, 0), (0, 0), (1, 0), (1, 1)]
-
--- Rotate a coordinate 90 degrees clockwise
-rotCW :: Position -> Position
-rotCW (x, y) = (-y, x)
-
--- Apply N clockwise rotations
-applyRot :: Int -> Position -> Position
-applyRot 0 p = p
-applyRot n p = applyRot (n - 1) (rotCW p)
-
--- Convert shape to color
-shapeColor :: Shape -> Color
-shapeColor s = case s of
-  I -> makeColorI 0 255 255 255   -- Cyan
-  O -> makeColorI 255 255 0 255   -- Yellow
-  T -> makeColorI 160 32 240 255  -- Purple
-  S -> makeColorI 0 255 0 255     -- Green
-  Z -> makeColorI 255 0 0 255     -- Red
-  J -> makeColorI 0 0 255 255     -- Blue
-  L -> makeColorI 255 165 0 255   -- Orange
-
--- Absolute board coordinates + color for rendering
+-- | Compute the colored block cells for rendering
 tetrominoBlocks :: Tetromino -> [(Int, Int, Color)]
-tetrominoBlocks (Tetromino s (px, py) ori) =
+tetrominoBlocks (Tetromino s (px,py) ori) =
   [ (px + dx, py + dy, shapeColor s)
-  | (dx, dy) <- map (applyRot ori) (baseCoords s)
+  | (dx, dy) <- map (rotateOffset ori) (baseCoords s)
   ]
 
--- Pure positions for collision / merging
-tetrominoPositions :: Tetromino -> [Position]
-tetrominoPositions (Tetromino s (px, py) ori) =
-  [ (px + dx, py + dy)
-  | (dx, dy) <- map (applyRot ori) (baseCoords s)
-  ]
-
--- Movement/Rotation helpers
+-- | Translate by (dx, dy)
 moveBy :: (Int, Int) -> Tetromino -> Tetromino
-moveBy (dx, dy) t = t { position = (x + dx, y + dy) }
-  where (x, y) = position t
+moveBy (dx, dy) tet = tet { position = (x + dx, y + dy) }
+  where (x, y) = position tet
 
-rotateRight, rotateLeft :: Tetromino -> Tetromino
-rotateRight t = t { orientation = (orientation t + 1) `mod` 4 }
-rotateLeft  t = t { orientation = (orientation t + 3) `mod` 4 }
+-- | Rotate clockwise
+rotateRight :: Tetromino -> Tetromino
+rotateRight tet = tet { orientation = (orientation tet + 1) `mod` 4 }
 
--- Random shape generator
+-- | Rotate counterclockwise
+rotateLeft :: Tetromino -> Tetromino
+rotateLeft tet = tet { orientation = (orientation tet + 3) `mod` 4 }
+
+-- | Pick a random shape
 randomShape :: IO Shape
-randomShape = do
-  i <- randomRIO (fromEnum (minBound :: Shape), fromEnum (maxBound :: Shape))
-  return (toEnum i)
+randomShape = toEnum <$> randomRIO (fromEnum (minBound :: Shape), fromEnum (maxBound :: Shape))
+
+-- Helpers -----------------------------------------------------
+
+type Offset = (Int, Int)
+
+-- | Rotate a coordinate offset by orientation
+rotateOffset :: Orientation -> Offset -> Offset
+rotateOffset 0 p         = p
+rotateOffset 1 (x,y)     = (-y, x)
+rotateOffset 2 (x,y)     = (-x, -y)
+rotateOffset 3 (x,y)     = (y, -x)
+rotateOffset _ p         = p
+
+-- | Base (unrotated) block positions for each Shape
+baseCoords :: Shape -> [Offset]
+baseCoords I = [(-2,0),(-1,0),(0,0),(1,0)]
+baseCoords O = [(0,0),(1,0),(0,1),(1,1)]
+baseCoords T = [(-1,0),(0,0),(1,0),(0,1)]
+baseCoords S = [(-1,1),(0,1),(0,0),(1,0)]
+baseCoords Z = [(-1,0),(0,0),(0,1),(1,1)]
+baseCoords J = [(-1,0),(-1,1),(0,0),(1,0)]
+baseCoords L = [(-1,0),(0,0),(1,0),(1,1)]
+
+-- | Map each shape to its fill Color
+shapeColor :: Shape -> Color
+shapeColor I = cyan
+shapeColor O = yellow
+shapeColor T = magenta
+shapeColor S = green
+shapeColor Z = red
+shapeColor J = blue
+shapeColor L = orange

@@ -11,66 +11,65 @@ module Board
   ) where
 
 import Data.Maybe (isJust, isNothing)
-import Data.List (partition)
-import Tetromino (Tetromino(..), Shape(..), tetrominoBlocks)
-import Graphics.Gloss (Color, makeColorI)
+import Data.List  (partition)
+import Tetromino  (Tetromino(..), Shape(..), tetrominoBlocks)
+import Brillo.Data.Color (Color, cyan, yellow, magenta, green, red, blue, white)
 
--- Types
-type Cell = Maybe Shape
+-- | A cell is either empty or holds a Shape
+type Cell  = Maybe Shape
+-- | The board is a grid of cells (rows of width boardWidth)
 type Board = [[Cell]]
 
 boardWidth, boardHeight :: Int
 boardWidth  = 10
 boardHeight = 20
 
--- Initialize an empty board
+-- | An empty board: all cells Nothing
 emptyBoard :: Board
 emptyBoard = replicate boardHeight (replicate boardWidth Nothing)
 
--- Check if a tetromino is in a valid position
+-- | Check that every block of the Tetromino is in bounds and on an empty cell
 isValidPosition :: Tetromino -> Board -> Bool
-isValidPosition tetromino board = all inBounds coords && all cellEmpty coords
+isValidPosition tet board = all inBounds coords && all cellEmpty coords
   where
-    coords    = map (\(x, y, _) -> (x, y)) (tetrominoBlocks tetromino)
-    inBounds (x, y) = x >= 0 && x < boardWidth && y >= 0 && y < boardHeight
-    cellEmpty (x, y) = isNothing (board !! y !! x)
+    coords    = [ (x,y)        | (x,y,_) <- tetrominoBlocks tet ]
+    inBounds (x,y)   = x >= 0 && x < boardWidth && y >= 0 && y < boardHeight
+    cellEmpty (x,y)  = isNothing (board !! y !! x)
 
--- Merge tetromino into the board
+-- | Merge a landed Tetromino into the board
 mergeTetromino :: Tetromino -> Board -> Board
-mergeTetromino tetromino board = foldr place board coords
+mergeTetromino tet board = foldr place board coords
   where
-    s       = shape tetromino
-    coords  = map (\(x, y, _) -> (x, y)) (tetrominoBlocks tetromino)
-    place (x, y) rows =
-      let row     = rows !! y
-          newRow  = take x row ++ [Just s] ++ drop (x + 1) row
-      in take y rows ++ [newRow] ++ drop (y + 1) rows
+    s      = shape tet
+    coords = [ (x,y) | (x,y,_) <- tetrominoBlocks tet ]
+    place (x,y) rows =
+      let row    = rows !! y
+          newRow = take x row ++ [Just s] ++ drop (x+1) row
+      in take y rows ++ [newRow] ++ drop (y+1) rows
 
--- Clear full lines and return the new board and lines cleared
+-- | Clear full lines, returning (newBoard, numberCleared)
 clearFullLines :: Board -> (Board, Int)
 clearFullLines bd =
-  let (fullRows, restRows) = partition (all isJust) bd
-      n                    = length fullRows
-      emptyRow             = replicate boardWidth Nothing
-      newBoard             = replicate n emptyRow ++ restRows
-  in (newBoard, n)
+  let (full, rest) = partition (all isJust) bd
+      n            = length full
+      emptyRow     = replicate boardWidth Nothing
+  in (replicate n emptyRow ++ rest, n)
 
--- Convert the board into drawable blocks
+-- | Convert board to drawable blocks (x,y,Color)
 boardToBlocks :: Board -> [(Int, Int, Color)]
-boardToBlocks board = 
+boardToBlocks bd =
   [ (x, y, shapeColor s)
-  | (y, row) <- zip [0..] board
+  | (y, row) <- zip [0..] bd
   , (x, cell) <- zip [0..] row
   , Just s <- [cell]
   ]
 
--- Shape to Color mapping
+-- | Map a Shape to its Brillo Color
 shapeColor :: Shape -> Color
-shapeColor s = case s of
-  I -> makeColorI 0 255 255 255   -- Cyan
-  O -> makeColorI 255 255 0 255   -- Yellow
-  T -> makeColorI 160 32 240 255  -- Purple
-  S -> makeColorI 0 255 0 255     -- Green
-  Z -> makeColorI 255 0 0 255     -- Red
-  J -> makeColorI 0 0 255 255     -- Blue
-  L -> makeColorI 255 165 0 255   -- Orange
+shapeColor I = cyan
+shapeColor O = yellow
+shapeColor T = magenta
+shapeColor S = green
+shapeColor Z = red
+shapeColor J = blue
+shapeColor L = white
