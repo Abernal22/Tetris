@@ -105,11 +105,11 @@ drawGame st =
 
       -- Labels
       nextLabel = color white
-                $ translate panelX (nextY + halfBox + 10)
+                $ translate (-windowWidth/2 +5 ) (nextY + halfBox - 115) 
                 $ scale 0.1 0.1
                 $ text "Next"
       holdLabel = color white
-          $ translate (panelX - 12) (holdY + halfBox + 20)
+          $ translate (-windowWidth/2 + 5) (holdY + halfBox - 115)
           $ scale 0.1 0.1
           $ text "Hold"
 
