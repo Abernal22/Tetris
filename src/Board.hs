@@ -13,7 +13,7 @@ module Board
 import Data.Maybe (isJust, isNothing)
 import Data.List  (partition)
 import Tetromino  (Tetromino(..), Shape(..), tetrominoBlocks)
-import Brillo.Data.Color (Color, cyan, yellow, magenta, green, red, blue, white)
+import Brillo.Data.Color (Color, cyan, yellow, magenta, green, red, blue, orange)
 
 -- | A cell is either empty or holds a Shape
 type Cell  = Maybe Shape
@@ -72,4 +72,4 @@ shapeColor T = magenta
 shapeColor S = green
 shapeColor Z = red
 shapeColor J = blue
-shapeColor L = white
+shapeColor L = orange

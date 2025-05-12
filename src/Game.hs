@@ -78,58 +78,80 @@ drawGame st =
       ]
   else
     let
-      -- Panel positions
-      panelX  = -windowWidth/2 + panelOffset/2
-      holdY   =  windowHeight/2 - panelOffset/2
-      nextY   =  holdY - panelOffset - 20
-
-      -- Wireframes
-      holdBox = color white $ translate panelX holdY $ rectangleWire panelOffset panelOffset
-      nextBox = color white $ translate panelX nextY $ rectangleWire panelOffset panelOffset
+      -- panel & board geometry
+      boxSize   = panelOffset
+      halfBox   = boxSize / 2
+      panelX    = -windowWidth/2 + halfBox
       boardLeft = -windowWidth/2 + panelOffset
       boardW    = fromIntegral boardWidth  * blockSize
       boardH    = fromIntegral boardHeight * blockSize
-      boardBox  = color white
-                $ translate (boardLeft + boardW/2) 0
-                $ rectangleWire boardW boardH
+
+      -- Y positions: Next on top, Hold right below
+      nextY =  windowHeight/2 - halfBox
+      holdY =  nextY - boxSize - 10
+
+      -- Board outline (right side)
+      boardBox = color white
+               $ translate (boardLeft + boardW/2) 0
+               $ rectangleWire boardW boardH
+
+      -- Next & Hold boxes (left side)
+      nextBox = color white
+              $ translate panelX nextY
+              $ rectangleWire boxSize boxSize
+      holdBox = color white
+              $ translate panelX holdY
+              $ rectangleWire boxSize boxSize
 
       -- Labels
-      holdLabel  = color white $ translate panelX (holdY + panelOffset/2 + 10) $ scale 0.1 0.1 $ text "Hold"
-      nextLabel  = color white $ translate panelX (nextY + panelOffset/2 + 10) $ scale 0.1 0.1 $ text "Next"
+      nextLabel = color white
+                $ translate panelX (nextY + halfBox + 10)
+                $ scale 0.1 0.1
+                $ text "Next"
+      holdLabel = color white
+                $ translate panelX (holdY + halfBox + 10)
+                $ scale 0.1 0.1
+                $ text "Hold"
 
-      -- Status (stacked)
-      statusX    = -windowWidth/2 + 10
-      statusY1   = -windowHeight/2 + 20
-      statusY2   = statusY1 + 20
-      scoreText  = color white $ translate statusX statusY1 $ scale 0.08 0.08 $ text ("Score: " ++ show (score st))
-      levelText  = color white $ translate statusX statusY2 $ scale 0.08 0.08 $ text ("Level: " ++ show (level st))
+      -- Score & Level, stacked bottom-left
+      scoreText = color white
+                $ translate (-windowWidth/2 + 10) (-windowHeight/2 + 20)
+                $ scale 0.08 0.08
+                $ text ("Score: " ++ show (score st))
+      levelText = color white
+                $ translate (-windowWidth/2 + 10) (-windowHeight/2 + 40)
+                $ scale 0.08 0.08
+                $ text ("Level: " ++ show (level st))
 
-      -- Draw main and preview blocks
-      drawMain (x,y,col) = translate
-          (fromIntegral x * blockSize + boardLeft + blockSize/2)
-          (-(fromIntegral y * blockSize - windowHeight/2 + blockSize/2))
+      -- Helper to draw a block centered at (cx,cy) in a panel
+      drawInPanel cx cy (x,y,col) =
+        translate
+          (cx + fromIntegral x * blockSize)
+          (cy - fromIntegral y * blockSize)
         $ color col
         $ rectangleSolid (blockSize - 2) (blockSize - 2)
+
+      -- Main board blocks
       mainBlocks = tetrominoBlocks (current st) ++ boardToBlocks (board st)
 
-      -- Preview helper: position blocks around box center
-      drawPreview tet (x,y,col) = translate
-          (panelX + fromIntegral x * blockSize)
-          (yOffset + fromIntegral (-y) * blockSize)
-        $ color col
-        $ rectangleSolid (blockSize - 2) (blockSize - 2)
-        where yOffset = nextY - panelOffset/4
-      previewBlocks = tetrominoBlocks (next st){ position=(0,0) }
-      holdBlocks    = maybe [] (\t -> tetrominoBlocks t{ position=(0,0) }) (hold st)
+      -- Upcoming piece centered in Next box
+      nextBlocks  = tetrominoBlocks ((next st) { position = (0,0) })
+
+      -- Held piece (if any) centered in Hold box
+      holdBlocks  = maybe [] (\t -> tetrominoBlocks (t { position = (0,0) })) (hold st)
 
     in return $ pictures
-         ( [ holdBox, nextBox, boardBox
-           , holdLabel, nextLabel, scoreText, levelText
+         ( [ boardBox
+           , nextBox, holdBox
+           , nextLabel, holdLabel
+           , scoreText, levelText
            ]
-         ++ map drawMain mainBlocks
-         ++ map (drawPreview (next st)) previewBlocks
-         ++ map (drawPreview (next st)) holdBlocks
+         ++ map (drawInPanel (boardLeft + blockSize/2) (windowHeight/2 - blockSize/2)) mainBlocks
+         ++ map (drawInPanel panelX nextY) nextBlocks
+         ++ map (drawInPanel panelX holdY) holdBlocks
          )
+
+
 
 -- | Handle key events
 handleEvent :: Event -> GameState -> IO GameState
